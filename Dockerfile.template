@@ -1,0 +1,29 @@
+FROM resin/%%RESIN_MACHINE_NAME%%-debian
+
+RUN apt-get update
+RUN apt-get install git cmake build-essential
+RUN apt-get install libqt4-dev libusb-1.0-0-dev libxrender-dev python python-dev zlib1g-dev doxygen
+RUN apt-get install python3 python3-pip python3-dev lirc
+
+
+WORKDIR /tmp
+RUN git clone --depth=1 --recursive https://github.com/hyperion-project/hyperion.git
+RUN mkdir -p /tmp/hyperion/build
+WORKDIR /tmp/hyperion/build
+RUN cmake -DCMAKE_BUILD_TYPE=Release -DENABLE_DISPMANX=OFF -DENABLE_SPIDEV=OFF -Wno-dev ..
+RUN make -j $(nproc)
+RUN cp bin/hyperion* /usr/bin
+RUN mkdir /etc/hyperion
+COPY ./hyperion.config.json /etc/hyperion
+RUN mkdir -p /opt/hyperion/effects
+RUN cp -R /tmp/hyperion/effects/ /opt/hyperion/effects
+RUN cp /tmp/hyperion/bin/service/hyperion.systemd.sh /etc/systemd/system/hyperion.service
+RUN systemctl enable hyperion
+
+WORKDIR /usr/src/app
+COPY ./requirements.txt requirements.txt
+RUN pip3 install -r requirements.txt
+COPY . ./
+
+ENV INITSYSTEM on
+CMD ["waitress-serve", "--port=80", "hyperion_control:app"]
